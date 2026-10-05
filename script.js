@@ -1,106 +1,556 @@
-const $ = (s, root=document) => root.querySelector(s);
-const $$ = (s, root=document) => [...root.querySelectorAll(s)];
-const DB_KEY = "the-gb-dash-demo-v1";
-const seed = {
-  members:[
-    {id:"A001",name:"Nadia Putri",division:"Pendidikan",email:"nadia@example.test"},
-    {id:"A002",name:"Rafi Pratama",division:"PSDM",email:"rafi@example.test"},
-    {id:"A003",name:"Hafizh Ikhwanul",division:"Pendidikan",email:"hafizh@example.test"},
-    {id:"A004",name:"Salsa Amalia",division:"Pubsos",email:"salsa@example.test"},
-    {id:"A005",name:"Dimas Akbar",division:"Pubsos",email:"dimas@example.test"},
-    {id:"A006",name:"Alya Rahmi",division:"Kewirausahaan",email:"alya@example.test"}
-  ],
-  activities:[
-    {id:"K001",name:"Rapat Koordinasi",date:"2026-09-15",division:"Pengurus",note:"Kegiatan"},
-    {id:"K002",name:"GenBI Mengajar",date:"2026-09-18",division:"Pendidikan",note:"Kegiatan"},
-    {id:"K003",name:"Kampanye Literasi",date:"2026-09-22",division:"Pubsos",note:"Kegiatan"}
-  ],
-  tasks:[
-    {id:"T001",name:"Menyusun konsep kegiatan",division:"Pendidikan",owner:"A001",status:"Selesai",progress:100,due:"2026-09-28",evidence:"https://example.com/bukti-t001",note:"Dokumen konsep sudah dikumpulkan."},
-    {id:"T002",name:"Menyiapkan materi publikasi",division:"Pubsos",owner:"A004",status:"Proses",progress:60,due:"2026-09-29",evidence:"",note:"Menunggu konfirmasi desain dari tim."},
-    {id:"T003",name:"Menyusun daftar kebutuhan",division:"PSDM",owner:"A002",status:"Belum Mulai",progress:0,due:"2026-10-02",evidence:"",note:""},
-    {id:"T004",name:"Membuat rancangan evaluasi",division:"Pendidikan",owner:"A003",status:"Proses",progress:35,due:"2026-10-04",evidence:"",note:"Progres tertunda karena menunggu data."}
-  ],
-  reviews:[
-    {id:"M001",date:"2026-09-18",member:"A001",activity:"K002",attendance:"Hadir",contribution:"Panitia",observer:"Auditor 01",note:"Catatan monitoring"},
-    {id:"M002",date:"2026-09-18",member:"A003",activity:"K002",attendance:"Hadir",contribution:"Peserta aktif",observer:"Auditor 02",note:"Catatan monitoring"},
-    {id:"M003",date:"2026-09-22",member:"A004",activity:"K003",attendance:"Hadir",contribution:"PIC publikasi",observer:"Auditor 03",note:"Catatan monitoring"},
-    {id:"M004",date:"2026-09-22",member:"A005",activity:"K003",attendance:"Tidak Hadir",contribution:"-",observer:"Auditor 04",note:"Catatan monitoring"},
-    {id:"M005",date:"2026-09-15",member:"A002",activity:"K001",attendance:"Hadir",contribution:"Notulis",observer:"Auditor 05",note:"Catatan monitoring"}
-  ]
-};
-let db = loadDB();
-let currentPage = "overview";
-let editContext = null;
+const $ = (s, root = document) => root.querySelector(s); const $$ = (s, root = document) => [...root.querySelectorAll(s)];
+
+const API_URL = "https://script.google.com/macros/s/AKfycbxYpvxxkElZVostCLGLV51N_kU1ZsEDf1Th6Ax3FvApkTCvgg7mlvDiFF4IFJDBREyu/exec";
+
+let currentDivision = "pendidikan";
+let currentUser = null; // null = guest (belum login)
+let globalData = { members: [], tasks: [], dashboard: [], allMembers: [] };
+let currentPage = "members";
+let isFetching = false;
 let selectedMemberId = null;
-const demoKpi = {A001:28,A002:22,A003:31,A004:26,A005:18,A006:30};
-const demoKpiHistory = {
- A001:[{date:"2026-09-18",label:"Mengikuti GenBI Mengajar",detail:"Kehadiran dan kontribusi",points:5},{date:"2026-09-20",label:"Disiplin administrasi",detail:"Pengumpulan laporan tepat waktu",points:3}],
- A002:[{date:"2026-09-15",label:"Rapat Koordinasi",detail:"Hadir sebagai notulis",points:5},{date:"2026-09-21",label:"Iuran belum dibayar",detail:"Pengurangan poin",points:-5}],
- A003:[{date:"2026-09-18",label:"GenBI Mengajar",detail:"Peserta aktif",points:5},{date:"2026-09-23",label:"Kontribusi kegiatan",detail:"Poin tambahan",points:4}],
- A004:[{date:"2026-09-22",label:"Kampanye Literasi",detail:"PIC publikasi",points:5}],
- A005:[{date:"2026-09-22",label:"Tidak hadir kegiatan",detail:"Pengurangan poin",points:-5}],
- A006:[{date:"2026-09-24",label:"Kontribusi kegiatan",detail:"Poin tambahan",points:5}]
+let memberQuery = "";
+
+const DIVISION_LABELS = {
+  inti: "Pengurus Inti",
+  pendidikan: "Pendidikan",
+  pubsos: "Publikasi & Sosialisasi",
+  pengabdian: "Pengabdian Masyarakat",
+  kewirausahaan: "Kewirausahaan",
+  lingkungan: "Lingkungan Hidup"
 };
-function loadDB(){try{const saved=localStorage.getItem(DB_KEY);return saved?JSON.parse(saved):structuredClone(seed)}catch(e){return structuredClone(seed)}}
-function saveDB(){localStorage.setItem(DB_KEY,JSON.stringify(db))}
-function esc(v=""){return String(v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-function memberName(id){return db.members.find(x=>x.id===id)?.name||id||"—"}
-function activityName(id){return db.activities.find(x=>x.id===id)?.name||id||"—"}
-function nextId(type,arr){let n=Math.max(0,...arr.map(x=>Number((x.id||"").slice(1))||0))+1;return type+String(n).padStart(3,"0")}
-function toast(msg){const el=$("#toast");el.textContent=msg;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),2400)}
-function head(kicker,title,sub,action=""){return `<div class="page-head"><div><p class="eyebrow">${kicker}</p><h1>${title}</h1><p class="subtitle">${sub}</p></div><div class="head-actions">${action}</div></div>`}
-function stat(label,value,icon,color,foot=""){return `<article class="stat-card"><div class="stat-top"><span class="stat-label">${label}</span><span class="stat-icon ${color}">${icon}</span></div><div class="stat-value">${value}</div><div class="stat-foot">${foot}</div></article>`}
-function emptyRow(cols,msg="Belum ada data"){return `<tr><td colspan="${cols}" class="empty-cell"><div style="font-size:24px">▤</div><strong>${msg}</strong><span>Data akan muncul setelah ditambahkan.</span></td></tr>`}
-function badge(status){let cls=status==="Selesai"||status==="Hadir"?"green":status==="Proses"||status==="Izin"?"orange":status==="Tidak Hadir"?"red":"gray";return `<span class="badge badge-${cls}">${esc(status||"—")}</span>`}
-function table(headers,rows,emptyText){return `<div class="table-wrap"><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${rows||emptyRow(headers.length,emptyText)}</tbody></table></div>`}
-function overview(){
- const done=db.tasks.filter(t=>t.status==="Selesai").length;
- const avg=db.tasks.length?Math.round(db.tasks.reduce((a,t)=>a+(+t.progress||0),0)/db.tasks.length):0;
- return `${head("OVERVIEW","Dashboard","Ringkasan informasi anggota, acara, dan monitoring GenBI.")}
- <div class="stats-grid">${stat("Total Anggota",db.members.length,"♙","blue","")}${stat("Total Acara",db.activities.length,"▣","green","")}${stat("Total Tugas / Proker",db.tasks.length,"▤","purple","")}${stat("Progres Keseluruhan",avg+"%","▥","orange",done+" tugas selesai")}</div>
- ${taskStatusPanel()}
-`
+const isGuest = () => !currentUser;
+
+// === 1. INISIALISASI: DEFAULT GUEST ===
+// TODO (Tahap 2): hapus bypass #dev dan ganti dengan login Google.
+async function initApp() {
+  if (location.hash === "#dev") {
+    currentUser = {
+      nama: "Admin Tester",
+      email: "admin@genbi",
+      role: "Admin",
+      divisionKey: "pendidikan"
+    };
+    currentPage = "overview";
+  } else {
+    currentUser = null;
+    currentPage = "members";
+  }
+  applyRolePermissions();
+  if (isGuest()) await fetchAllMembers();
+  else await fetchDivisionData();
 }
-function taskStatusPanel(){const statuses=[{name:"Belum Mulai",color:"#b8c3d3"},{name:"Proses",color:"#f5a623"},{name:"Selesai",color:"#19a775"}];const total=db.tasks.length;const counts=statuses.map(x=>({...x,count:db.tasks.filter(t=>t.status===x.name).length}));const a=total?counts[0].count/total*100:0,b=total?counts[1].count/total*100:0;return `<section class="panel"><div class="panel-head"><div><h2>Status Tugas / Proker</h2><p>Ringkasan jumlah tugas berdasarkan status.</p></div></div><div class="donut-wrap"><div class="donut" style="background:${total?donutGradient():"conic-gradient(#dce3ed 0 100%)"}"><div class="donut-center"><strong>${total}</strong><small>Total tugas</small></div></div><div class="legend">${counts.map(x=>legendRow(x.name,x.count,x.color)).join("")}</div></div></section>`}
-function legendRow(label,count,color){return `<div class="legend-row"><i class="dot" style="background:${color}"></i><span>${label}</span><strong>${count}</strong></div>`}
-function donutGradient(){const total=db.tasks.length||1;const a=db.tasks.filter(t=>t.status==="Belum Mulai").length/total*100;const b=db.tasks.filter(t=>t.status==="Proses").length/total*100;return `conic-gradient(#b8c3d3 0 ${a}%,#f5a623 ${a}% ${a+b}%,#19a775 ${a+b}% 100%)`}
-function memberRow(m){const score=demoKpi[m.id]??0;return `<tr><td><strong>${esc(m.id)}</strong></td><td><strong>${esc(m.name)}</strong></td><td>${esc(m.division)}</td><td><span class="badge ${score>=25?"badge-green":"badge-orange"}">${score}/25</span></td><td><div class="row-actions"><button class="mini-btn" data-member-detail="${esc(m.id)}">Detail</button></div></td></tr>`}
-function membersPage(){const rows=db.members.map(memberRow).join("");
- return `${head("DATA & MONITORING","Monitoring Anggota","Cari anggota dan buka detail KPI serta riwayat monitoring.")}<section class="panel"><div class="toolbar"><input data-filter placeholder="Cari nama, NIM/ID, atau divisi..." /><select data-filter-select><option value="">Semua divisi</option>${[...new Set(db.members.map(m=>m.division))].map(x=>`<option>${esc(x)}</option>`).join("")}</select></div><div id="filteredTable">${table(["ID Anggota","Nama","Divisi","KPI","Aksi"],rows,"Belum ada anggota")}</div></section>`}
-function memberDetailPage(){const m=db.members.find(x=>x.id===selectedMemberId);if(!m)return membersPage();const score=demoKpi[m.id]??0;const history=demoKpiHistory[m.id]||[];const rows=history.map(h=>`<tr><td>${esc(h.date)}</td><td><strong>${esc(h.label)}</strong><br><small>${esc(h.detail)}</small></td><td><span class="badge ${h.points>=0?"badge-green":"badge-red"}">${h.points>0?"+":""}${h.points}</span></td></tr>`).join("");return `${head("MONITORING ANGGOTA","Detail Anggota",`Profil dan riwayat KPI ${esc(m.name)}.`,`<button class="btn btn-light" data-page="members">← Kembali ke daftar</button>`)}<div class="stats-grid">${stat("Nama Anggota",esc(m.name),"♙","blue",m.id)}${stat("Divisi",esc(m.division),"▣","purple","Divisi anggota")}${stat("KPI Saat Ini",`${score}/25`,"✦",score>=25?"green":"orange",score>=25?"Memenuhi ambang contoh":"Di bawah ambang contoh")}${stat("Riwayat Poin",history.length,"◷","orange","Catatan riwayat")}</div><section class="panel"><div class="panel-head"><div><h2>Riwayat KPI</h2><p>Catatan aktivitas dan perubahan poin.</p></div></div>${table(["Tanggal","Aktivitas / Catatan","Poin"],rows,"Belum ada riwayat")}</section>`}
-function evidenceCell(url){if(!url)return "—";const safe=String(url).trim();return /^https?:\/\//i.test(safe)?`<a href="${esc(safe)}" target="_blank" rel="noopener noreferrer">Lihat bukti ↗</a>`:esc(safe)}
-function taskRow(t){return `<tr><td><strong>${esc(t.id)}</strong></td><td>${esc(t.name)}</td><td>${esc(t.division)}</td><td>${badge(t.status)}</td><td><div style="display:flex;align-items:center;gap:8px"><div class="progress-track"><div class="progress-fill" style="width:${t.progress}%"></div></div>${t.progress}%</div></td><td>${esc(t.due||"—")}</td><td>${evidenceCell(t.evidence)}</td><td>${esc(t.note||"—")}</td></tr>`}
-function tasksPage(){const rows=db.tasks.map(taskRow).join("");
- return `${head("DATA & MONITORING","Monitoring Tugas","Pantau tugas, progres, bukti, dan catatan situasi khusus.")}<section class="panel"><div class="toolbar"><input data-filter placeholder="Cari tugas atau divisi..." /><select data-filter-select><option value="">Semua status</option><option>Belum Mulai</option><option>Proses</option><option>Selesai</option></select></div>${taskStatusPanel()}<div id="filteredTable">${table(["ID","Nama Tugas","Divisi","Status","Progres","Tenggat","Bukti","Catatan"],rows,"Belum ada tugas")}</div></section>`}
-function activitiesPage(){const sorted=[...db.activities].sort((a,b)=>(a.date||"").localeCompare(b.date||""));const rows=sorted.map(a=>`<tr><td><strong>${esc(a.date||"—")}</strong></td><td><strong>${esc(a.name)}</strong><br><small>${esc(a.id)}</small></td><td><button class="mini-btn" data-event-detail="${esc(a.id)}">Detail</button></td></tr>`).join("");
- return `${head("AGENDA ORGANISASI","Kalender Acara","Agenda kegiatan berdasarkan tanggal.")}<div class="notice">Pilih Detail untuk melihat keterangan, lokasi, dan informasi acara lainnya.</div><section class="panel">${table(["Tanggal","Acara","Detail"],rows,"Belum ada acara")}</section>`}
-function reviewsPage(){const rows=db.reviews.map(r=>`<tr><td><strong>${r.id}</strong></td><td>${esc(r.date)}</td><td>${esc(memberName(r.member))}</td><td>${esc(activityName(r.activity))}</td><td>${badge(r.attendance)}</td><td>${esc(r.contribution)}</td><td>${esc(r.observer)}</td><td><div class="row-actions"><button class="mini-btn" data-edit="reviews" data-id="${r.id}">Edit</button><button class="mini-btn" data-delete="reviews" data-id="${r.id}">Hapus</button></div></td></tr>`).join("");
- return `${head("MONITORING","Evaluasi & Catatan","Catatan pengawasan dari tim monitoring.",'<button class="btn btn-primary" data-add="reviews">＋ Tambah catatan</button>')}<div class="notice"></div><section class="panel">${table(["ID Catatan","Tanggal","Anggota","Kegiatan","Kehadiran","Kontribusi","Pengawas","Aksi"],rows,"Belum ada catatan")}</section>`}
-function settingsPage(){return `${head("PREFERENSI","Pengaturan & Data","Kelola data demo dan ekspor cadangan.")}<div class="settings-grid"><section class="setting-box"><h2>Data dashboard</h2><p>Data disimpan di penyimpanan lokal browser (localStorage) pada perangkat ini. </p><div class="head-actions"><button class="btn btn-primary" data-action="export">⇩ Ekspor JSON</button><button class="btn btn-light" data-action="import">⇧ Impor JSON</button><input id="importFile" type="file" accept="application/json" hidden></div></section><section class="setting-box"><h2>Reset data</h2><p>Kembalikan anggota, kegiatan, tugas, dan catatan ke data awal. Perubahan lokal saat ini akan diganti.</p><button class="btn btn-danger" data-action="reset">↻ Reset data</button></section><section class="setting-box"><h2>Status implementasi</h2><p><b>Antarmuka:</b> berjalan di browser.<br><b>Data:</b> lokal.<br><b>Penyimpanan:</b> localStorage.<br><b>Login dan akses peran:</b> belum tersedia.<br><b>Integrasi Spreadsheet:</b> belum tersedia.</p></section><section class="setting-box"><h2>Catatan keamanan</h2><p>Jangan memasukkan data pribadi atau catatan evaluasi sensitif ke dashboard ini. localStorage bukan database terpusat dan tidak menyediakan kontrol akses antar pengguna.</p></section></div>`}
-const pageRender={overview,members:membersPage,"member-detail":memberDetailPage,tasks:tasksPage,activities:activitiesPage};
-const pageTitles={overview:"Dashboard",members:"Monitoring Anggota",tasks:"Monitoring Tugas",activities:"Kalender Acara"};
-function render(){const fn=pageRender[currentPage]||overview;$("#content").innerHTML=fn();$$(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.page===currentPage));wireFilter();window.scrollTo({top:0,behavior:"smooth"})}
-function go(page){currentPage=page;render();$("#sidebar").classList.remove("open")}
-const schemas={
- members:[["name","Nama anggota","text",true],["division","Divisi","text",true],["email","Email","email",false]],
- activities:[["name","Nama kegiatan","text",true],["date","Tanggal","date",true],["location","Lokasi","text",false],["division","Divisi (opsional, jika proker divisi)","text",false],["note","Keterangan acara","textarea",false]],
- tasks:[["name","Nama tugas","text",true],["division","Divisi","text",true],["owner","Penanggung jawab","member",true],["status","Status","status",true],["progress","Progres (%)","number",true],["due","Tenggat","date",false],["evidence","Link bukti (URL)","url",false],["note","Catatan / situasi khusus","textarea",false]],
- reviews:[["date","Tanggal","date",true],["member","Anggota","member",true],["activity","Kegiatan","activity",true],["attendance","Kehadiran","attendance",true],["contribution","Kontribusi/peran","text",false],["observer","Nama pengawas","text",true],["note","Catatan","textarea",false]]
+
+function applyRolePermissions() {
+  const guest = isGuest();
+  const select = $("#divisionSelect");
+  if (select) {
+    select.disabled = false;
+    select.style.display = guest ? "none" : "";
+  }
+  // Guest hanya melihat menu pencarian anggota
+  $$(".nav-item").forEach(b => {
+    const page = b.dataset.page;
+    b.style.display = guest && page !== "members" ? "none" : "";
+  });
+  const membersNav = $('.nav-item[data-page="members"]');
+  if (membersNav) membersNav.lastChild.textContent = guest ? " Cari Anggota" : " Monitoring Anggota";
+
+  const loginBtn = $("#loginBtn");
+  if (loginBtn) loginBtn.style.display = guest ? "" : "none";
+  const userBadge = $("#userBadge");
+  if (userBadge) {
+    userBadge.style.display = guest ? "none" : "";
+    userBadge.textContent = guest ? "" : `${currentUser.nama} · ${currentUser.role}`;
+  }
+}
+
+// === 1b. FETCH DAFTAR ANGGOTA SEMUA DIVISI (MODE GUEST) ===
+async function fetchAllMembers() {
+  const cacheKey = "genbi_cache_all_members";
+  let cachedData = null;
+  try { cachedData = sessionStorage.getItem(cacheKey); } catch (e) {}
+
+  if (cachedData) {
+    try {
+      globalData.allMembers = JSON.parse(cachedData);
+      render();
+    } catch (e) { cachedData = null; }
+  }
+  if (!cachedData) {
+    $("#content").innerHTML = `<div style="text-align:center; padding:50px;"><strong>Memuat daftar anggota...</strong></div>`;
+  }
+
+  try {
+    const res = await fetch(`${API_URL}?action=getAllMembers`).then(r => r.json());
+    const fresh = res.data || [];
+    if (!cachedData || JSON.stringify(fresh) !== JSON.stringify(globalData.allMembers)) {
+      globalData.allMembers = fresh;
+      try { sessionStorage.setItem(cacheKey, JSON.stringify(fresh)); } catch (e) {}
+      // Jangan render ulang kalau user sedang mengetik di kolom cari
+      if (document.activeElement?.id !== "memberSearch") render();
+    }
+  } catch (e) {
+    if (!cachedData) {
+      $("#content").innerHTML = `<div style="text-align:center; padding:50px;"><strong>Gagal memuat data. Periksa koneksi lalu muat ulang halaman.</strong></div>`;
+    }
+  }
+}
+
+// === 2. FETCH DATA DIVISI ===
+async function fetchDivisionData() {
+  const cacheKey = `genbi_cache_${currentDivision}`;
+  const cachedData = sessionStorage.getItem(cacheKey);
+
+  if (cachedData) {
+    try {
+      // 1. Tampilkan data dari cache secara INSTAN (0 detik loading)
+      const parsed = JSON.parse(cachedData);
+      globalData.members = parsed.members;
+      globalData.tasks = parsed.tasks;
+      render(); // Halaman langsung muncul tanpa teks "Memuat..."
+    } catch (e) {}
+  } else {
+    // Kalau belum ada cache sama sekali, tampilkan teks loading standar
+    if (!isFetching) {
+      $("#content").innerHTML = `<div style="text-align:center; padding:50px;"><strong>Memuat Data Google Sheets (${currentDivision.toUpperCase()})...</strong></div>`;
+    }
+  }
+
+  // 2. Tarik data terbaru dari Google Sheets di BALIK LAYAR (Background Sync)
+  if (isFetching) return;
+  isFetching = true;
+
+  try {
+    const [membersRes, kpiRes] = await Promise.all([
+      fetch(`${API_URL}?action=getMembers&division=${currentDivision}`).then(r => r.json()),
+      fetch(`${API_URL}?action=getKPI&division=${currentDivision}`).then(r => r.json())
+    ]);
+
+    const freshMembers = membersRes.data || [];
+    const freshTasks = kpiRes.data || [];
+
+    // Bandingkan apakah ada perubahan data
+    const hasChanged = JSON.stringify(freshTasks) !== JSON.stringify(globalData.tasks);
+
+    if (hasChanged || !cachedData) {
+      globalData.members = freshMembers;
+      globalData.tasks = freshTasks;
+
+      // Update cache dengan data terbaru
+      sessionStorage.setItem(cacheKey, JSON.stringify({
+        members: freshMembers,
+        tasks: freshTasks
+      }));
+
+      // Render ulang layar secara mulus jika ada perubahan data dari server
+      render();
+    }
+  } catch (e) {
+    // Jika offline/gagal fetch, biarkan pakai data cache yang sudah ada
+  } finally {
+    isFetching = false;
+  }
+}
+
+// === 3. HELPER TAMPILAN ===
+function esc(v = "") {
+  return String(v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function toast(msg) {
+  const el = $("#toast");
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 2500);
+}
+
+function head(kicker, title, sub, action = "") {
+  return `<div class="page-head"><div><p class="eyebrow">${kicker}</p><h1>${title}</h1><p class="subtitle">${sub}</p></div><div class="head-actions">${action}</div></div>`;
+}
+
+function stat(label, value, icon, color, foot = "") {
+  return `<article class="stat-card"><div class="stat-top"><span class="stat-label">${label}</span><span class="stat-icon ${color}">${icon}</span></div><div class="stat-value">${value}</div><div class="stat-foot">${foot}</div></article>`;
+}
+
+function badge(status) {
+  let cls = status === "Selesai" ? "green" : status === "Proses" ? "orange" : "gray";
+  return `<span class="badge badge-${cls}">${esc(status || "—")}</span>`;
+}
+
+function renderEvidenceLinks(evidenceStr) {
+  if (!evidenceStr) return "—";
+  const links = String(evidenceStr).split("\n").filter(l => l.trim().length > 0);
+  return links.map((url, idx) => {
+    let clean = url.trim();
+    return /^https?:\/\//i.test(clean) ? `<a href="${esc(clean)}" target="_blank" rel="noopener">Bukti ${idx + 1} ↗</a>` : esc(clean);
+  }).join("<br>");
+}
+
+// === 4. HALAMAN DASHBOARD & MONITORING TUGAS ===
+function overview() {
+  const tasks = globalData.tasks || [];
+  const members = globalData.members || [];
+  const done = tasks.filter(t => t.status === "Selesai").length;
+
+  return `
+    ${head("OVERVIEW", "Dashboard", `Monitoring Divisi ${currentDivision.toUpperCase()}`)}
+    <div class="stats-grid">
+      ${stat("Total Anggota", members.length, "♙", "blue", "Anggota terdaftar")}
+      ${stat("Total Proker", tasks.length, "▤", "purple", "Program kerja")}
+      ${stat("Proker Selesai", done, "▥", "green", "Telah selesai")}
+    </div>
+  `;
+}
+
+function taskRow(t) {
+  const prokerId = t.iDProker || t.idProker || t.IDProker || t.id || "";
+  const namaTugas = t.namaProgramKerja || t.namaProker || t.namaTugas || t.nama || "—";
+  const picTugas = t.pIC || t.penanggungJawab || t.pj || "—";
+  const linkBukti = t.linkBuktiUtama || t.bukti || t.linkBukti || "";
+  const hasBukti = Boolean(linkBukti);
+  
+  // FIX PERSENTASE: Mengubah format desimal Google Sheets jadi persentase normal
+  let rawProgres = Number(t.progres || t.Progres || t['%Progres'] || 0);
+  const progresNum = (rawProgres > 0 && rawProgres <= 1) ? Math.round(rawProgres * 100) : rawProgres;
+  
+  // Rapikan format tanggal kalau dari Google Sheets bentuknya aneh
+  let tenggatTampil = t.tenggat || t.tenggatWaktu || "—";
+  if (String(tenggatTampil).includes('T')) {
+    tenggatTampil = tenggatTampil.split('T')[0];
+  }
+
+  return `
+    <tr>
+      <td><strong>${esc(prokerId)}</strong></td>
+      <td>${esc(namaTugas)}</td>
+      <td>${esc(t.divisi || currentDivision)}</td>
+      <td>${esc(picTugas)}</td>
+      <td>${badge(t.status || "Belum Mulai")}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="progress-track" style="min-width:60px;"><div class="progress-fill" style="width:${progresNum}%"></div></div>
+          ${progresNum}%
+        </div>
+      </td>
+      <td>${esc(tenggatTampil)}</td>
+      <td>${renderEvidenceLinks(linkBukti)}</td>
+      <td>${esc(t.catatan || "—")}</td>
+      <td><button class="mini-btn" onclick="openUploadModal('${esc(prokerId)}')">${hasBukti ? "Edit Bukti" : "+ Tambah Bukti"}</button></td>
+    </tr>
+  `;
+}
+
+function tasksPage() {
+  const tasks = globalData.tasks || [];
+  const rows = tasks.map(taskRow).join("");
+  const addBtn = `<button class="btn btn-primary" onclick="handleAddProkerPrompt()">＋ Tambah Proker Baru</button>`;
+
+  return `
+    ${head("DATA & MONITORING", "Monitoring Tugas", "Pantau tugas, progres, bukti, dan catatan situasi khusus.", addBtn)}
+    <section class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nama Tugas</th>
+              <th>Divisi</th>
+              <th>Penanggung Jawab</th>
+              <th>Status</th>
+              <th>Progres</th>
+              <th>Tenggat</th>
+              <th>Bukti</th>
+              <th>Catatan</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>${rows || '<tr><td colspan="10" class="empty-cell">Belum ada proker terdaftar.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+// === 5. HALAMAN ANGGOTA & DETAIL PROFIL (DENGAN TRACKER TAB) ===
+// Backend mengubah header "ID Anggota" menjadi key "iDAnggota", jadi cek beberapa kemungkinan.
+// Kalau kolom ID kosong, pakai nama lengkap agar tombol Detail tetap berfungsi.
+// Untuk daftar lintas divisi (guest), awalan divisionKey menjaga ID tetap unik.
+function getMemberId(m) {
+  const base = String(m.iDAnggota || m.idAnggota || m.IDAnggota || m.id || m.namaLengkap || m.nama || "").trim();
+  return (m.divisionKey ? m.divisionKey + "|" : "") + base;
+}
+
+function getMemberDivisionKey(m) {
+  return m.divisionKey || currentDivision;
+}
+
+function currentMemberList() {
+  return isGuest() ? (globalData.allMembers || []) : (globalData.members || []);
+}
+
+function filterMembers(list, query) {
+  const named = list.filter(m => m.namaLengkap || m.nama);
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return named;
+  return named.filter(m => [
+    m.namaLengkap, m.nama, m.namaPanggilan, m.panggilan,
+    m.divisi, DIVISION_LABELS[getMemberDivisionKey(m)], m.role, m.iDAnggota
+  ].some(v => String(v || "").toLowerCase().includes(q)));
+}
+
+function memberRow(m) {
+  const id = getMemberId(m);
+  const idTampil = m.iDAnggota || m.idAnggota || m.IDAnggota || m.id || "—";
+  const divTampil = m.divisi || DIVISION_LABELS[getMemberDivisionKey(m)] || getMemberDivisionKey(m);
+  return `
+    <tr>
+      <td><strong>${esc(idTampil)}</strong></td>
+      <td><strong>${esc(m.namaLengkap || m.nama || "—")}</strong></td>
+      <td>${esc(divTampil)}</td>
+      <td><button class="mini-btn" data-member-detail="${esc(id)}">Detail</button></td>
+    </tr>
+  `;
+}
+
+function memberRows(list) {
+  const filtered = filterMembers(list, memberQuery);
+  if (filtered.length === 0) {
+    const msg = memberQuery ? `Tidak ada anggota yang cocok dengan "${esc(memberQuery)}".` : "Belum ada anggota.";
+    return `<tr><td colspan="4" class="empty-cell">${msg}</td></tr>`;
+  }
+  return filtered.map(memberRow).join("");
+}
+
+// Hanya isi tabel yang diganti agar kolom cari tidak kehilangan fokus saat mengetik
+function onMemberSearch(value) {
+  memberQuery = value;
+  const tbody = $("#memberTableBody");
+  if (tbody) tbody.innerHTML = memberRows(currentMemberList());
+}
+
+function membersPage() {
+  const guest = isGuest();
+  const members = currentMemberList();
+
+  return `
+    ${head(
+      guest ? "PROFIL ANGGOTA" : "DATA & MONITORING",
+      guest ? "Cari Anggota" : "Monitoring Anggota",
+      guest ? "Cari anggota GenBI dari semua divisi dan buka profilnya." : "Cari anggota dan buka profil detail."
+    )}
+    <section class="panel">
+      <div class="toolbar">
+        <input id="memberSearch" type="search" placeholder="Cari nama, panggilan, divisi, atau role..." value="${esc(memberQuery)}" oninput="onMemberSearch(this.value)" autocomplete="off">
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID Anggota</th>
+              <th>Nama Lengkap</th>
+              <th>Divisi</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="memberTableBody">${memberRows(members)}</tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function memberDetailPage() {
+  const m = currentMemberList().find(x => getMemberId(x) === String(selectedMemberId));
+  
+  if (!m) return membersPage();
+
+  const divKey = getMemberDivisionKey(m);
+  const backBtn = `<button class="btn btn-light" data-page="members">← Kembali ke daftar</button>`;
+  const namaPanggilan = m.panggilan || m.namaPanggilan || String(m.namaLengkap || m.nama || "").split(' ')[0];
+  
+  // Ambil data tracker dari tab perorangan di Google Sheets
+  fetch(`${API_URL}?action=getTracker&division=${encodeURIComponent(divKey)}&nickname=${encodeURIComponent(namaPanggilan)}`)
+    .then(r => r.json())
+    .then(res => {
+      const tbody = $("#trackerTableBody");
+      if (!tbody) return;
+      
+      if (res.status === "success" && res.data.length > 0) {
+        tbody.innerHTML = res.data.map(t => `
+          <tr>
+            <td style="white-space: nowrap;">${esc(t.tanggal instanceof Date ? t.tanggal.toLocaleDateString('id-ID') : t.tanggal)}</td>
+            <td>
+              <strong>${esc(t.kegiatan)}</strong> 
+              <span class="badge ${t.poin > 0 ? 'badge-green' : (t.poin < 0 ? 'badge-red' : 'badge-gray')}" style="margin-left:8px;">${t.poin > 0 ? '+' : ''}${esc(t.poin)} Poin</span>
+              <br><small>${esc(t.catatan)}</small>
+            </td>
+          </tr>
+        `).join("");
+      } else {
+        tbody.innerHTML = `<tr><td colspan="2" class="empty-cell">Belum ada riwayat / Tab '${esc(namaPanggilan)}' tidak ditemukan.</td></tr>`;
+      }
+    })
+    .catch(() => {
+      const tbody = $("#trackerTableBody");
+      if (tbody) tbody.innerHTML = `<tr><td colspan="2" class="empty-cell">Gagal memuat riwayat. Periksa koneksi.</td></tr>`;
+    });
+
+  return `
+    ${head("MONITORING ANGGOTA", "Detail Anggota", `Profil dan catatan tracker ${esc(m.namaLengkap || m.nama)}.`, backBtn)}
+    
+    <div class="stats-grid">
+      ${stat("Nama Anggota", esc(m.namaLengkap || m.nama), "♙", "blue", esc(m.iDAnggota || m.idAnggota || m.id || "—"))}
+      ${stat("Divisi", esc(m.divisi || DIVISION_LABELS[divKey] || divKey), "▣", "purple", "Divisi aktif")}
+      ${stat("Role / Jabatan", esc(m.role || m.jabatan || "Anggota"), "✦", "green", "Posisi kepengurusan")}
+      ${stat("Tab Panggilan", esc(namaPanggilan), "◷", "orange", "Referensi sheet")}
+    </div>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Catatan Tracker Jabatan</h2>
+          <p>Daftar riwayat aktivitas, keaktifan, dan evaluasi anggota.</p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 150px;">Tanggal</th>
+              <th>Aktivitas & Catatan Auditor</th>
+            </tr>
+          </thead>
+          <tbody id="trackerTableBody">
+            <tr><td colspan="2" style="text-align:center; padding: 30px;"><em>Memuat riwayat tracker...</em></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+// === 6. MODAL UPLOAD LINK & TAMBAH PROKER ===
+function openUploadModal(idProker) {
+  const task = globalData.tasks.find(t => String(t.iDProker || t.idProker || t.id) === String(idProker));
+  if (!task) {
+    toast("ID Proker tidak ditemukan!");
+    return;
+  }
+  
+  $("#formProkerId").value = idProker;
+  $("#modalProkerTitle").textContent = `Update: ${task.namaProgramKerja || task.namaProker || idProker}`;
+  
+  // Konversi progres untuk input form
+  let rawProgres = Number(task.progres || task.Progres || task['%Progres'] || 0);
+  $("#formProgres").value = (rawProgres > 0 && rawProgres <= 1) ? Math.round(rawProgres * 100) : rawProgres;
+  
+  $("#formStatus").value = task.status || "Belum Mulai";
+  $("#formPic").value = task.pIC || task.penanggungJawab || task.pj || "";
+  $("#formCatatan").value = task.catatan || "";
+  $("#formLinkBukti").value = task.linkBuktiUtama || task.bukti || task.linkBukti || "";
+
+  // Ambil tanggal untuk ditaruh di type="date"
+  let tgl = task.tenggat || task.tenggatWaktu || "";
+  if (String(tgl).includes('T')) tgl = String(tgl).split('T')[0];
+  $("#formTenggat").value = tgl;
+  
+  $("#uploadModal")?.showModal();
+}
+
+function handleAddProkerPrompt() {
+  const namaProker = prompt("Masukkan nama Program Kerja baru:");
+  if (!namaProker) return;
+  
+  const payload = {
+    action: "addProker",
+    division: currentDivision,
+    prokerData: { namaProker: namaProker.trim() }
+  };
+  
+  toast("Menyiapkan proker baru...");
+  sendPostPayload(payload);
+}
+
+async function handleSaveProker(e) {
+  e.preventDefault();
+  const payload = {
+    action: "uploadEvidence",
+   division: currentDivision,
+   idProker: $("#formProkerId").value,
+   progres: Number($("#formProgres").value),
+   status: $("#formStatus").value,
+   pic: $("#formPic").value.trim(),
+   catatan: $("#formCatatan").value.trim(),
+   tenggat: $("#formTenggat").value,
+   linkBukti: $("#formLinkBukti").value.trim() // Cukup kirim 1 data link ini saja
+  };
+
+  toast("Menyimpan data ke Google Sheets...");
+  await sendPostPayload(payload);
+}
+
+async function sendPostPayload(payload) {
+  try {
+    const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(payload) }).then(r => r.json());
+    if (res.status === "success") {
+      toast(res.message || "Berhasil disimpan!");
+      $("#uploadModal")?.close();
+      
+      // PENTING: Hapus cache ingatan lama agar layar langsung mengambil data baru!
+      sessionStorage.removeItem(`genbi_cache_${currentDivision}`);
+      
+      // Tarik ulang data ke layar
+      fetchDivisionData();
+    } else {
+      toast("Gagal: " + res.message);
+    }
+  } catch (err) {
+    toast("Terjadi kesalahan koneksi!");
+  }
+}
+
+// === 7. EVENT LISTENER & NAVIGASI ===
+const pageRender = { 
+  overview, 
+  members: membersPage, 
+  "member-detail": memberDetailPage,
+  tasks: tasksPage 
 };
-function fieldHtml([key,label,type,required],value=""){let input="";if(type==="member")input=`<select name="${key}" ${required?"required":""}><option value="">Pilih anggota</option>${db.members.map(m=>`<option value="${m.id}" ${value===m.id?"selected":""}>${m.id} — ${esc(m.name)}</option>`).join("")}</select>`;
- else if(type==="activity")input=`<select name="${key}" ${required?"required":""}><option value="">Pilih kegiatan</option>${db.activities.map(a=>`<option value="${a.id}" ${value===a.id?"selected":""}>${a.id} — ${esc(a.name)}</option>`).join("")}</select>`;
- else if(type==="status"||type==="attendance"){const opts=type==="status"?["Belum Mulai","Proses","Selesai"]:["Hadir","Izin","Tidak Hadir"];input=`<select name="${key}" required>${opts.map(o=>`<option ${value===o?"selected":""}>${o}</option>`).join("")}</select>`}
- else if(type==="textarea")input=`<textarea name="${key}">${esc(value)}</textarea>`;
- else input=`<input name="${key}" type="${type}" value="${esc(value)}" ${required?"required":""} ${type==="number"?'min="0" max="100"':''}>`;
- return `<div class="field ${type==="textarea"?"full":""}"><label>${label}${required?" *":""}</label>${input}</div>`}
-function openForm(kind,id=null){if(!schemas[kind])return;const existing=id?db[kind].find(x=>x.id===id):null;editContext={kind,id};$("#modalEyebrow").textContent=id?"EDIT DATA":"TAMBAH DATA";$("#modalTitle").textContent=(id?"Edit ":"Tambah ")+({members:"Anggota",activities:"Kegiatan",tasks:"Tugas",reviews:"Catatan Monitoring"}[kind]);$("#modalFields").innerHTML=schemas[kind].map(f=>fieldHtml(f,existing?.[f[0]]??(f[0]==="status"?"Belum Mulai":f[0]==="attendance"?"Hadir":""))).join("");$("#modal").showModal()}
-function closeModal(){$("#modal").close();editContext=null}
-function wireFilter(){const input=$("[data-filter]"),sel=$("[data-filter-select]");if(!input)return;const update=()=>{const q=input.value.toLowerCase();const f=sel?.value||"";let rows="",headers=[];if(currentPage==="members"){headers=["ID Anggota","Nama","Divisi","KPI","Aksi"];rows=db.members.filter(m=>(`${m.id} ${m.name} ${m.division} ${m.email}`.toLowerCase().includes(q))&&(!f||m.division===f)).map(memberRow).join("")}
- else if(currentPage==="tasks"){headers=["ID","Nama Tugas","Divisi","Status","Progres","Tenggat","Bukti","Catatan"];rows=db.tasks.filter(t=>(`${t.id} ${t.name} ${t.division}`.toLowerCase().includes(q))&&(!f||t.status===f)).map(taskRow).join("")}
- if($("#filteredTable"))$("#filteredTable").innerHTML=table(headers,rows,"Tidak ada data yang cocok")}
- input.addEventListener("input",update);sel?.addEventListener("change",update)}
-document.addEventListener("click",e=>{const evd=e.target.closest("[data-event-detail]");if(evd){const a=db.activities.find(x=>x.id===evd.dataset.eventDetail);if(a){$("#detailTitle").textContent=a.name;$("#detailBody").innerHTML=`<p><strong>Tanggal:</strong> ${esc(a.date||"—")}</p><p><strong>Lokasi:</strong> ${esc(a.location||"Belum ditentukan")}</p>${a.division?`<p><strong>Divisi:</strong> ${esc(a.division)}</p>`:""}<p><strong>Keterangan:</strong><br>${esc(a.note||"Belum ada keterangan")}</p>`;$("#detailModal").showModal()}return}const detail=e.target.closest("[data-member-detail]");if(detail){selectedMemberId=detail.dataset.memberDetail;go("member-detail");return}const nav=e.target.closest("[data-page]");if(nav){go(nav.dataset.page);return}});
-$("#menuBtn").onclick=()=>$("#sidebar").classList.toggle("open");
-function exportData(){const blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="the-gb-dash-data.json";a.click();URL.revokeObjectURL(a.href);toast("File JSON diekspor")}
-render();
+
+function render() {
+  // Guest hanya boleh melihat pencarian anggota & profil
+  if (isGuest() && !["members", "member-detail"].includes(currentPage)) currentPage = "members";
+  const fn = pageRender[currentPage] || overview;
+  $("#content").innerHTML = fn();   $$(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.page === (currentPage === "member-detail" ? "members" : currentPage)));
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function go(page) {
+  currentPage = page;
+  render();
+  $("#sidebar")?.classList.remove("open");
+}
+
+document.addEventListener("click", e => {
+  const nav = e.target.closest("[data-page]");
+  if (nav) { go(nav.dataset.page); return; }
+
+  const detailBtn = e.target.closest("[data-member-detail]");
+  if (detailBtn) {
+    selectedMemberId = detailBtn.dataset.memberDetail;
+    go("member-detail");
+  }
+});
+
+document.addEventListener("change", (e) => {
+  if (e.target && e.target.id === "divisionSelect") {
+    currentDivision = e.target.value;
+    fetchDivisionData();
+  }
+});
+
+$("#menuBtn").onclick = () => $("#sidebar")?.classList.toggle("open");
+
+// Jalankan Inisialisasi Utama
+initApp();

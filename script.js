@@ -403,7 +403,7 @@ function memberDetailPage() {
       ${stat("Nama Anggota", esc(m.namaLengkap || m.nama), "♙", "blue", esc(m.iDAnggota || m.idAnggota || m.id || "—"))}
       ${stat("Divisi", esc(m.divisi || DIVISION_LABELS[divKey] || divKey), "▣", "purple", "Divisi aktif")}
       ${stat("Role / Jabatan", esc(m.role || m.jabatan || "Anggota"), "✦", "green", "Posisi kepengurusan")}
-      ${stat("Tab Panggilan", esc(namaPanggilan), "◷", "orange", "Referensi sheet")}
+      ${stat("Panggilan", esc(namaPanggilan), "◷", "orange", "Referensi sheet")}
     </div>
 
     <section class="panel">

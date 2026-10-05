@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#101d33">
+  <title>The GB Dash | GenBI Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark"><img src="Logo Genbi.jpeg" alt="Logo GenBI"></div>
+        <div class="brand-title"><strong>The GB Dash <span class="version-badge">V1</span></strong><small>GenBI Dashboard</small></div>
+      </div>
+      <nav class="nav">
+        <button class="nav-item active" data-page="overview"><span>▦</span> Dashboard</button>
+        <button class="nav-item" data-page="members"><span>♙</span> Monitoring Anggota</button>
+        <button class="nav-item" data-page="tasks"><span>▤</span> Monitoring Tugas</button>
+      </nav>
+      <div class="nav-bottom">
+        
+      </div>
+    </aside>
+
+    <!-- Tambahan id="mainContent" untuk fungsi toggle sidebar -->
+    <main class="main" id="mainContent">
+      <header class="topbar">
+        <button class="mobile-menu" id="menuBtn" aria-label="Buka menu">☰</button>
+        <div class="top-actions">
+          <select id="divisionSelect" class="select" style="font-weight: 600; padding: 8px 12px; border-radius: 8px;">
+            <option value="pendidikan">Pendidikan</option>
+            <option value="inti">Pengurus Inti</option>
+            <option value="pubsos">Publikasi & Sosialisasi</option>
+            <option value="pengabdian">Pengabdian Masyarakat</option>
+            <option value="kewirausahaan">Kewirausahaan</option>
+            <option value="lingkungan">Lingkungan Hidup</option>
+          </select>
+          <!-- Tambahan Tombol Login Sistem -->
+          <button class="btn btn-primary" id="loginBtn" onclick="handleAuth()">Login</button>
+        </div>
+      </header>
+      <section class="content" id="content"></section>
+      <footer>THE GB DASH · V1</footer>
+    </main>
+  </div>
+  
+ <!-- Modal Add / Upload Proker (KODE ASLI) -->
+<dialog class="modal" id="uploadModal">
+  <div style="padding:24px; max-width: 500px; width: 100%;">
+    <div class="modal-head">
+      <div>
+        <p class="eyebrow">MONITORING PROKER</p>
+        <h2 id="modalProkerTitle">Update Proker</h2>
+      </div>
+      <button class="icon-btn" type="button" onclick="document.getElementById('uploadModal').close()">×</button>
+    </div>
+    <form id="prokerForm" onsubmit="handleSaveProker(event)">
+      <input type="hidden" id="formProkerId">
+      
+      <div class="field" style="margin-bottom:12px">
+        <label>Penanggung Jawab (PIC)</label>
+        <input type="text" id="formPic" placeholder="Nama PIC / Penanggung jawab">
+      </div>
+
+      <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+        <div class="field" style="flex: 1;">
+          <label>Progres (%) [0-100]</label>
+          <input type="number" id="formProgres" min="0" max="100" required>
+        </div>
+        <div class="field" style="flex: 1;">
+          <label>Status Proker</label>
+          <select id="formStatus">
+            <option value="Belum Mulai">Belum Mulai</option>
+            <option value="Proses">Proses</option>
+            <option value="Terkendala">Terkendala</option>
+            <option value="Selesai">Selesai</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field" style="margin-bottom:12px">
+        <label>Link Bukti (Pisahkan dengan Enter jika lebih dari 1)</label>
+        <textarea id="formLinkBukti" placeholder="Masukkan link gdrive, youtube, dsb..."></textarea>
+      </div>
+
+      <div class="field" style="margin-bottom:12px">
+        <label>Catatan</label>
+        <textarea id="formCatatan" placeholder="Catatan atau kendala proker..."></textarea>
+      </div>
+      
+      <div class="field" style="margin-bottom:16px">
+        <label>Tenggat Waktu</label>
+        <input type="date" id="formTenggat">
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-light" type="button" onclick="document.getElementById('uploadModal').close()">Batal</button>
+        <button class="btn btn-primary" type="submit">Simpan Perubahan</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<!-- TAMBAHAN BARU: Modal Detail Anggota -->
+<dialog class="modal" id="memberModal">
+  <div style="padding:24px; max-width: 650px; width: 100%;">
+    <div class="modal-head">
+      <div>
+        <p class="eyebrow">DETAIL ANGGOTA</p>
+        <h2 id="detailNama">Nama Lengkap</h2>
+      </div>
+      <button class="icon-btn" type="button" onclick="document.getElementById('memberModal').close()">×</button>
+    </div>
+    <div class="stats-grid" id="detailStats" style="margin-bottom: 20px;"></div>
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Riwayat Aktivitas & Poin</h2>
+          <p>Hanya menampilkan riwayat dan poin untuk anggota terkait.</p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 120px;">Tanggal</th>
+              <th>Aktivitas & Catatan</th>
+            </tr>
+          </thead>
+          <tbody id="detailTrackerBody">
+            <tr><td colspan="2" class="empty-cell">Memuat riwayat...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- TAMBAHAN BARU: Modal Viewer Bukti -->
+<dialog class="modal" id="buktiModal">
+  <div style="padding:24px; max-width: 800px; width: 100%; height: 75vh; display: flex; flex-direction: column;">
+    <div class="modal-head">
+      <div>
+        <p class="eyebrow">VIEWER DOKUMEN</p>
+        <h2>Bukti Proker</h2>
+      </div>
+      <button class="icon-btn" type="button" onclick="document.getElementById('buktiModal').close()">×</button>
+    </div>
+    <div id="buktiContent" style="flex:1; overflow:auto; background:#f4f7fb; border-radius:12px; padding: 10px; display: grid; place-items: center;">
+    </div>
+  </div>
+</dialog>
+
+  <div class="toast" id="toast" role="status"></div>
+  <script src="script.js"></script>
+</body>
+</html>

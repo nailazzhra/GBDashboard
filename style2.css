@@ -1,0 +1,48 @@
+/* ================= TAMBAHAN FITUR V1.1 ================= */
+/* Sidebar Toggle & Animations */
+.sidebar { transition: transform 0.3s ease, width 0.3s ease; }
+.main { transition: margin-left 0.3s ease; }
+
+.sidebar.collapsed { width: 85px; }
+.sidebar.collapsed .brand-title,
+.sidebar.collapsed .sidebar-foot { display: none; }
+.sidebar.collapsed .nav-item { flex-direction: column; text-align: center; font-size: 10px; gap: 5px; padding: 12px 5px; }
+.sidebar.collapsed .nav-item span { font-size: 22px; width: auto; }
+.main.expanded { margin-left: 85px; }
+
+/* Responsive adjustments */
+@media (max-width: 760px) {
+  .desktop-menu { display: none !important; }
+  .sidebar.collapsed { width: 250px; transform: translateX(-100%); } /* reset ke default hp */
+  .main.expanded { margin-left: 0; }
+}
+
+/* Modal extra styling */
+.modal::backdrop { background: rgba(10, 24, 48, 0.65); backdrop-filter: blur(4px); }
+.modal { animation: modalFadeIn 0.3s ease forwards; }
+
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.auth-badge {
+  display: inline-block; padding: 6px 12px; border-radius: 20px;
+  background: var(--blue2); color: var(--blue); font-weight: 700; font-size: 12px;
+}
+.logout-btn {
+  background: #fff0f0; color: #b93a3a; padding: 6px 12px; border-radius: 20px; border: none; font-size:12px; font-weight:600; cursor:pointer;
+}
+.logout-btn:hover { background: #f7d5d5; }
+/* --- TAMBAHAN UNTUK FITUR BARU --- */
+.sidebar { transition: transform 0.3s ease, width 0.3s ease, padding 0.3s ease; overflow-x: hidden; }
+.sidebar.collapsed { width: 0; padding: 24px 0; transform: translateX(-100%); }
+.main { transition: margin-left 0.3s ease; }
+.main.expanded { margin-left: 0; }
+
+@media(min-width: 761px){
+  .mobile-menu { display: block !important; cursor: pointer; border: 1px solid var(--line); }
+}
+
+iframe { border-radius: 8px; }
+.mini-btn { cursor: pointer; }
